@@ -1,0 +1,163 @@
+apiVersion: kops.k8s.io/v1alpha2
+kind: Cluster
+metadata:
+  name: {{k8s.example.com}}
+spec:
+  api:
+    loadBalancer:
+      type: Public
+  authorization:
+    alwaysAllow: {}
+  channel: stable
+  cloudProvider: aws
+  configBase: s3://{{example-state-store}}/{{k8s.example.com}}
+  etcdClusters:
+  - etcdMembers:
+    - instanceGroup: master-us-east-2a
+      name: a
+    - instanceGroup: master-us-east-2b
+      name: b
+    volumeType: {{gp3}}
+    volumeSize: {{10}}
+    name: main
+    manager:
+    backupInterval: 1h
+  - etcdMembers:
+    - instanceGroup: master-us-east-2a
+      name: a
+    - instanceGroup: master-us-east-2b
+      name: b
+    volumeType: {{gp3}}
+    volumeSize: {{10}}
+    name: events
+  kubernetesApiAccess:
+  - 0.0.0.0/0
+  kubernetesVersion: {{1.6.6}}
+  masterPublicName: api.{{k8s.example.com}}
+  networkCIDR: 172.20.0.0/16
+  networkID: {{vpc-6335dd1a}}
+  networking:
+    weave: {}
+  nonMasqueradeCIDR: 100.64.0.0/10
+  sshAccess:
+  - 0.0.0.0/0
+  subnets:
+  - cidr: 172.20.32.0/19
+    name: us-east-2a
+    type: Private
+    zone: us-east-2a
+  - cidr: 172.20.64.0/19
+    name: us-east-2b
+    type: Private
+    zone: us-east-2b
+  - cidr: 172.20.0.0/22
+    name: utility-us-east-2a
+    type: Utility
+    zone: us-east-2a
+  - cidr: 172.20.4.0/22
+    name: utility-us-east-2b
+    type: Utility
+    zone: us-east-2b
+  topology:
+    bastion:
+      bastionPublicName: bastion.{{k8s.example.com}}
+    dns:
+      type: Public
+    masters: private
+    nodes: private
+
+---
+
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  labels:
+    kops.k8s.io/cluster: {{k8s.example.com}}
+  name: bastions
+spec:
+  image: kope.io/k8s-1.6-debian-jessie-amd64-hvm-ebs-2017-05-02
+  machineType: t2.micro
+  maxSize: 1
+  minSize: 1
+  role: Bastion
+  subnets:
+  - utility-us-east-2a
+  - utility-us-east-2b
+
+
+---
+
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  labels:
+    kops.k8s.io/cluster: {{k8s.example.com}}
+  name: master-us-east-2a
+spec:
+  image: kope.io/k8s-1.6-debian-jessie-amd64-hvm-ebs-2017-05-02
+  machineType: m4.large
+  maxSize: 1
+  minSize: 1
+  role: Master
+  subnets:
+  - us-east-2a
+
+
+---
+
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  labels:
+    kops.k8s.io/cluster: {{k8s.example.com}}
+  name: master-us-east-2b
+spec:
+  image: kope.io/k8s-1.6-debian-jessie-amd64-hvm-ebs-2017-05-02
+  machineType: m4.large
+  maxSize: 1
+  minSize: 1
+  role: Master
+  subnets:
+  - us-east-2b
+
+---
+
+apiVersion: kops.k8s.io/v1alpha2
+kind: InstanceGroup
+metadata:
+  labels:
+    kops.k8s.io/cluster: {{k8s.example.com}}
+  name: nodes
+spec:
+  image: {{kope.io/k8s-1.6-debian-jessie-amd64-hvm-ebs-2017-05-02}}
+  machineType: {{t2.micro}}
+  maxSize: 1
+  minSize: 1
+  role: Node
+  subnets:
+  - us-east-2a
+  - us-east-2b
+
+
+# export NAME=k8s.example.com
+# export KOPS_STATE_STORE=s3://example-state-store
+# kops create cluster $NAME \
+#     --zones "us-east-2a,us-east-2b" \
+#     --master-zones "us-east-2a,us-east-2b" \
+#     --networking weave \
+#     --topology private \
+#     --bastion \
+#     --node-count 2 \
+#     --node-size t2.micro \
+#     --kubernetes-version v1.6.6 \
+#     --master-size t2.micro \
+#     --vpc vpc-6335dd1a \
+#     --dry-run \
+#     -o yaml > $NAME.yaml
+
+# kops create -f $NAME.yaml
+# kops create secret --name $NAME sshpublickey admin -i ~/.ssh/id_rsa.pub
+# kops update cluster $NAME --yes
+# kops rolling-update cluster $NAME --yes
+# kops get cluster $NAME --full -o yaml
+
